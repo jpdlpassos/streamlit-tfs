@@ -5,6 +5,7 @@ import pandas as pd
 def compute_progress(name, out_name):
     df = pd.read_csv(name)
     df["Key Result"].replace(regex=r'</*div>', value="", inplace=True)
+    df["Key Result method"].replace(regex=r'</*div>', value="", inplace=True)
     objectives = []
 
     key_results = []
@@ -14,15 +15,22 @@ def compute_progress(name, out_name):
             objectives.append({"title": row["Title"], "id": row["ID"], "features": [
             ], "Assigned To": row["Assigned To"], "Area Path": row["Area Path"]})
 
-        else:
+    for (_, row) in df.iterrows():
+        if (row["Work Item Type"] == "Feature"):
             progress = 100 if row["State"] in [
                 "Done", "Closed", "Resolved"] else 0
             Kresults = row["Key Result"].split(
                 ", ") if isinstance(row["Key Result"], str) else []
-            objectives[len(objectives)-1]["features"].append({"id": row["ID"],
-                                                              "title": row["Title"], "state": row["State"],
-                                                              "id": row["ID"],
-                                                              "progress": progress, "Key Result": [{'key': k, 'progress': progress} for k in Kresults]})
+            Kresults_methods = row["Key Result method"].split(
+                ", ") if isinstance(row["Key Result method"], str) else []
+
+            for krm in Kresults_methods:
+                obj = list(filter(lambda x: str(x["id"]) == krm, objectives))
+                if len(obj):
+                    obj[0]["features"].append({"id": row["ID"],
+                                               "title": row["Title"], "state": row["State"],
+                                               "id": row["ID"],
+                                               "progress": progress, "Key Result": [{'key': k, 'progress': progress} for k in Kresults]})
 
             for k in Kresults:
                 key_results.append(k)
@@ -33,7 +41,6 @@ def compute_progress(name, out_name):
     key_results_map = Counter(key_results)
     key_results_done_map = Counter(key_results_done)
     key_set = set(key_results)
-
     for obj in objectives:
         d = {}
         for feature in obj["features"]:
@@ -41,9 +48,11 @@ def compute_progress(name, out_name):
                 key = k["key"]
                 k["progress"] = 100 * key_results_done_map[key] / \
                     key_results_map[key]
-# Progress Objective calculated by progress of the features (wth KR or not)
-        obj["progress"] = sum(
-            map(lambda x: x["progress"], obj["features"]))/len(obj["features"])
+        if len(obj['features']):
+            obj["progress"] = sum(
+                map(lambda x: x["progress"], obj["features"]))/len(obj["features"])
+        else:
+            print(obj)
 
     list_progress = []
 
@@ -53,7 +62,6 @@ def compute_progress(name, out_name):
         for feature in obj["features"]:
             for k in feature["Key Result"]:
                 features[k["key"]].append(
-
                     feature["title"]
                 )
                 if k['key'] not in key_res:
@@ -70,7 +78,7 @@ def compute_progress(name, out_name):
                         })
 
                     key_res.append(k["key"])
-# Feature
+
                 line = [x for x in list_progress if x["Key Result"]
                         == k["key"] and x["Objective"] == obj["title"]][0]
                 line["Feature"] = ", ".join(features[k["key"]])
